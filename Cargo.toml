@@ -1,0 +1,9 @@
+[package]
+name = "robots-rust"
+version = "0.1.0"
+authors = ["Lars Westermann <lars-westermann@live.de>"]
+
+[dependencies]
+byteorder = "1.2.6"
+ev3dev-lang-rust = "0.4.0"
+#ev3dev-lang-rust = {path = "../ev3dev-lang-rust"}
