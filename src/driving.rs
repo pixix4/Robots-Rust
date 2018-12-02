@@ -3,8 +3,8 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
-use ev3dev_lang_rust::tacho_motor::{self, TachoMotor, LargeMotor, MediumMotor};
 use ev3dev_lang_rust::core::MotorPort;
+use ev3dev_lang_rust::tacho_motor::{self, LargeMotor, MediumMotor, TachoMotor};
 
 const MAX_SPEED: u8 = 100;
 const PID_SPEED: f32 = 0.5;
@@ -97,16 +97,15 @@ fn perform_drive(driving_receiver: &Receiver<DrivingCommand>) -> Result<()> {
                 kicker.run_to_abs_pos(Some(0))?;
             }
         }
-
     }
 }
-
 
 pub fn start() -> Sender<DrivingCommand> {
     let (driving_sender, driving_receiver) = mpsc::channel();
 
-    thread::Builder::new().name("Driving".to_string()).spawn(move || {
-        loop {
+    thread::Builder::new()
+        .name("Driving".to_string())
+        .spawn(move || loop {
             match perform_drive(&driving_receiver) {
                 Ok(_) => {
                     break;
@@ -115,8 +114,8 @@ pub fn start() -> Sender<DrivingCommand> {
                     println!("A drive error occurred, retry!");
                 }
             }
-        }
-    }).unwrap();
+        })
+        .unwrap();
 
     return driving_sender;
 }

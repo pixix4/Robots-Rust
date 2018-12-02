@@ -1,6 +1,6 @@
+use std::fs;
 use std::io::Result;
 use std::path::Path;
-use std::fs;
 
 use ev3dev_lang_rust::led::{self, Led};
 use ev3dev_lang_rust::power_supply::PowerSupply;
@@ -40,14 +40,14 @@ impl Status {
     }
 
     pub fn get_name(&self) -> String {
-        fs::read_to_string("name").unwrap_or_else(|_| { String::new() })
+        fs::read_to_string("name").unwrap_or_else(|_| String::new())
     }
     pub fn set_name(&self, name: String) {
         fs::write("name", name).unwrap();
     }
 
     pub fn get_color(&self) -> String {
-        fs::read_to_string("color").unwrap_or_else(|_| { String::new() })
+        fs::read_to_string("color").unwrap_or_else(|_| String::new())
     }
     pub fn set_color(&mut self, color: String) {
         fs::write("color", color).unwrap();
@@ -69,40 +69,19 @@ impl Status {
 
     fn load_color(&mut self) {
         let main_color = match self.get_color().as_ref() {
-            COLOR_LIME => {
-                led::COLOR_GREEN
-            }
-            COLOR_YELLOW => {
-                led::COLOR_YELLOW
-            }
-            COLOR_AMBER => {
-                led::COLOR_AMBER
-            }
-            COLOR_ORANGE => {
-                led::COLOR_ORANGE
-            }
-            COLOR_RED => {
-                led::COLOR_RED
-            }
-            _ => {
-                led::COLOR_OFF
-            }
+            COLOR_LIME => led::COLOR_GREEN,
+            COLOR_YELLOW => led::COLOR_YELLOW,
+            COLOR_AMBER => led::COLOR_AMBER,
+            COLOR_ORANGE => led::COLOR_ORANGE,
+            COLOR_RED => led::COLOR_RED,
+            _ => led::COLOR_OFF,
         };
 
-
         let status_color = match self.connection {
-            ConnectionState::DISCONNECTED => {
-                led::COLOR_RED
-            }
-            ConnectionState::CONNECTING => {
-                led::COLOR_AMBER
-            }
-            ConnectionState::CONNECTED => {
-                led::COLOR_GREEN
-            }
-            ConnectionState::RECONNECTING => {
-                led::COLOR_YELLOW
-            }
+            ConnectionState::DISCONNECTED => led::COLOR_RED,
+            ConnectionState::CONNECTING => led::COLOR_AMBER,
+            ConnectionState::CONNECTED => led::COLOR_GREEN,
+            ConnectionState::RECONNECTING => led::COLOR_YELLOW,
         };
 
         self.led.set_left_color(main_color).unwrap();
@@ -115,7 +94,7 @@ impl Status {
             String::from(COLOR_YELLOW),
             String::from(COLOR_AMBER),
             String::from(COLOR_ORANGE),
-            String::from(COLOR_RED)
+            String::from(COLOR_RED),
         ]
     }
 
