@@ -1,4 +1,6 @@
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use status::ConnectionState;
+use status::Status;
 use std::io::Cursor;
 use std::io::Read;
 use std::io::Result;
@@ -8,10 +10,8 @@ use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use RobotCommand;
 use std::time::SystemTime;
-use status::Status;
-use status::ConnectionState;
+use RobotCommand;
 
 const DISCOVERY_PORT: u16 = 7500;
 const PING_TIMEOUT: Duration = Duration::from_millis(100);
@@ -61,39 +61,54 @@ fn get_server_address(discover_port: u16) -> Result<SocketAddr> {
     }
 }
 
-fn parse_message_v1(cursor: &mut Cursor<&[u8]>, robot_sender: &Sender<RobotCommand>, status: &mut Status) -> Result<()> {
+fn parse_message_v1(
+    cursor: &mut Cursor<&[u8]>,
+    robot_sender: &Sender<RobotCommand>,
+    status: &mut Status,
+) -> Result<()> {
     let message_type = cursor.read_u8()?;
     match message_type {
-        0 => { // Pong
+        0 => {
+            // Pong
         }
-        10 => { // SetTrack
+        10 => {
+            // SetTrack
             let left = cursor.read_f32::<BigEndian>()?;
             let right = cursor.read_f32::<BigEndian>()?;
-            let _ = robot_sender.send(RobotCommand::SetTrack(left, right)).unwrap();
+            let _ = robot_sender
+                .send(RobotCommand::SetTrack(left, right))
+                .unwrap();
         }
-        12 => { // SetTrim
+        12 => {
+            // SetTrim
             let trim = cursor.read_f32::<BigEndian>()?;
             let _ = robot_sender.send(RobotCommand::SetTrim(trim)).unwrap();
         }
-        20 => { // Kick
+        20 => {
+            // Kick
             let _ = robot_sender.send(RobotCommand::Kick).unwrap();
         }
-        30 => { // SetPid
+        30 => {
+            // SetPid
             let pid = cursor.read_u8()?;
             let _ = robot_sender.send(RobotCommand::SetPid(pid != 0)).unwrap();
         }
-        31 => { // SetForeground
+        31 => {
+            // SetForeground
             let _ = robot_sender.send(RobotCommand::SetForeground).unwrap();
         }
-        32 => { // SetBackground
+        32 => {
+            // SetBackground
             let _ = robot_sender.send(RobotCommand::SetBackground).unwrap();
         }
-        40 => { // SetName
+        40 => {
+            // SetName
             let mut name = String::new();
             cursor.read_to_string(&mut name)?;
             status.set_name(name)
         }
-        41 => { // SetLedColor
+        41 => {
+            // SetLedColor
             let mut color = String::new();
             cursor.read_to_string(&mut color)?;
             status.set_color(color)
@@ -105,15 +120,23 @@ fn parse_message_v1(cursor: &mut Cursor<&[u8]>, robot_sender: &Sender<RobotComma
     Ok(())
 }
 
-fn send(socket: &UdpSocket, target: &SocketAddr, message_version: u8, message_type: u8, message_content: Vec<u8>) -> Result<usize> {
-    let mut bytes = vec!(message_version, message_type);
+fn send(
+    socket: &UdpSocket,
+    target: &SocketAddr,
+    message_version: u8,
+    message_type: u8,
+    message_content: Vec<u8>,
+) -> Result<usize> {
+    let mut bytes = vec![message_version, message_type];
     bytes.extend(message_content);
 
     socket.send_to(bytes.as_ref(), target)
 }
 
-fn perform_networking(robot_sender: &Sender<RobotCommand>, stop_receiver: &Receiver<NetworkCommand>) -> Result<()> {
-
+fn perform_networking(
+    robot_sender: &Sender<RobotCommand>,
+    stop_receiver: &Receiver<NetworkCommand>,
+) -> Result<()> {
     let mut status = Status::new().unwrap();
 
     // Get server address
@@ -131,10 +154,34 @@ fn perform_networking(robot_sender: &Sender<RobotCommand>, stop_receiver: &Recei
     let mut last_pong = SystemTime::now();
     status.set_connection_state(ConnectionState::CONNECTED);
 
-    send(&socket, &server_address, 1, 1, status.get_version().into_bytes())?;
-    send(&socket, &server_address, 1, 2, status.get_name().into_bytes())?;
-    send(&socket, &server_address, 1, 3, status.get_color().into_bytes())?;
-    send(&socket, &server_address, 1, 4, status.get_available_colors().join(";").into_bytes())?;
+    send(
+        &socket,
+        &server_address,
+        1,
+        1,
+        status.get_version().into_bytes(),
+    )?;
+    send(
+        &socket,
+        &server_address,
+        1,
+        2,
+        status.get_name().into_bytes(),
+    )?;
+    send(
+        &socket,
+        &server_address,
+        1,
+        3,
+        status.get_color().into_bytes(),
+    )?;
+    send(
+        &socket,
+        &server_address,
+        1,
+        4,
+        status.get_available_colors().join(";").into_bytes(),
+    )?;
 
     let mut stopped = false;
 
@@ -202,8 +249,9 @@ fn perform_networking(robot_sender: &Sender<RobotCommand>, stop_receiver: &Recei
 pub fn start(robot_sender: Sender<RobotCommand>) -> Sender<NetworkCommand> {
     let (stop_sender, stop_receiver) = mpsc::channel();
 
-    thread::Builder::new().name("Network".to_string()).spawn(move || {
-        loop {
+    thread::Builder::new()
+        .name("Network".to_string())
+        .spawn(move || loop {
             match perform_networking(&robot_sender, &stop_receiver) {
                 Ok(_) => {
                     break;
@@ -212,8 +260,8 @@ pub fn start(robot_sender: Sender<RobotCommand>) -> Sender<NetworkCommand> {
                     println!("A network error occurred, retry! {}", e);
                 }
             }
-        }
-    }).unwrap();
+        })
+        .unwrap();
 
     return stop_sender;
 }
