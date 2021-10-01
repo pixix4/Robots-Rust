@@ -1,9 +1,11 @@
 [package]
 name = "robots-rust"
-version = "0.1.0"
-authors = ["Lars Westermann <lars-westermann@live.de>"]
+version = "0.2.0"
+authors = ["Lars Westermann <rust@lars-westermann.de>"]
 
 [dependencies]
-byteorder = "1.2.6"
-ev3dev-lang-rust = "0.4.0"
-#ev3dev-lang-rust = {path = "../ev3dev-lang-rust"}
+byteorder = "1.4"
+ev3dev-lang-rust = "0.10"
+
+[profile.release]
+lto = true

@@ -1,17 +1,17 @@
 use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use ev3dev_lang_rust::Ev3Result;
+use status::ConnectionState;
+use status::Status;
 use std::io::Cursor;
 use std::io::Read;
-use std::io::Result;
 use std::net::SocketAddr;
 use std::net::UdpSocket;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use RobotCommand;
 use std::time::SystemTime;
-use status::Status;
-use status::ConnectionState;
+use RobotCommand;
 
 const DISCOVERY_PORT: u16 = 7500;
 const PING_TIMEOUT: Duration = Duration::from_millis(100);
@@ -20,7 +20,7 @@ const DISCONNECT_TIMEOUT: u32 = 5000;
 const BUFFER_SIZE: usize = 64;
 
 /// Start an UDP discovery on given port to find the server's socket address.
-fn get_server_address(discover_port: u16) -> Result<SocketAddr> {
+fn get_server_address(discover_port: u16) -> Ev3Result<SocketAddr> {
     println!("Start discovery on port {}.", discover_port);
 
     // Listen to whole network on a random port
@@ -39,7 +39,7 @@ fn get_server_address(discover_port: u16) -> Result<SocketAddr> {
         let mut send_buffer = [0; 4];
         send_buffer[3] = 1;
         // Send empty discovery packet
-        socket.send_to(&mut send_buffer, broadcast_address)?;
+        socket.send_to(&send_buffer, broadcast_address)?;
 
         let mut receive_buffer = [0; 4];
         // Receive server port
@@ -61,39 +61,53 @@ fn get_server_address(discover_port: u16) -> Result<SocketAddr> {
     }
 }
 
-fn parse_message_v1(cursor: &mut Cursor<&[u8]>, robot_sender: &Sender<RobotCommand>, status: &mut Status) -> Result<()> {
+fn parse_message_v1(
+    cursor: &mut Cursor<&[u8]>,
+    robot_sender: &Sender<RobotCommand>,
+    status: &mut Status,
+) -> Ev3Result<()> {
     let message_type = cursor.read_u8()?;
     match message_type {
         0 => { // Pong
         }
-        10 => { // SetTrack
+        10 => {
+            // SetTrack
             let left = cursor.read_f32::<BigEndian>()?;
             let right = cursor.read_f32::<BigEndian>()?;
-            let _ = robot_sender.send(RobotCommand::SetTrack(left, right)).unwrap();
+            let _ = robot_sender
+                .send(RobotCommand::SetTrack(left, right))
+                .unwrap();
         }
-        12 => { // SetTrim
+        12 => {
+            // SetTrim
             let trim = cursor.read_f32::<BigEndian>()?;
             let _ = robot_sender.send(RobotCommand::SetTrim(trim)).unwrap();
         }
-        20 => { // Kick
+        20 => {
+            // Kick
             let _ = robot_sender.send(RobotCommand::Kick).unwrap();
         }
-        30 => { // SetPid
+        30 => {
+            // SetPid
             let pid = cursor.read_u8()?;
             let _ = robot_sender.send(RobotCommand::SetPid(pid != 0)).unwrap();
         }
-        31 => { // SetForeground
+        31 => {
+            // SetForeground
             let _ = robot_sender.send(RobotCommand::SetForeground).unwrap();
         }
-        32 => { // SetBackground
+        32 => {
+            // SetBackground
             let _ = robot_sender.send(RobotCommand::SetBackground).unwrap();
         }
-        40 => { // SetName
+        40 => {
+            // SetName
             let mut name = String::new();
             cursor.read_to_string(&mut name)?;
             status.set_name(name)
         }
-        41 => { // SetLedColor
+        41 => {
+            // SetLedColor
             let mut color = String::new();
             cursor.read_to_string(&mut color)?;
             status.set_color(color)
@@ -105,20 +119,29 @@ fn parse_message_v1(cursor: &mut Cursor<&[u8]>, robot_sender: &Sender<RobotComma
     Ok(())
 }
 
-fn send(socket: &UdpSocket, target: &SocketAddr, message_version: u8, message_type: u8, message_content: Vec<u8>) -> Result<usize> {
-    let mut bytes = vec!(message_version, message_type);
+fn send(
+    socket: &UdpSocket,
+    target: &SocketAddr,
+    message_version: u8,
+    message_type: u8,
+    message_content: Vec<u8>,
+) -> Ev3Result<usize> {
+    let mut bytes = vec![message_version, message_type];
     bytes.extend(message_content);
 
-    socket.send_to(bytes.as_ref(), target)
+    Ok(socket.send_to(bytes.as_ref(), target)?)
 }
 
-fn perform_networking(robot_sender: &Sender<RobotCommand>, stop_receiver: &Receiver<NetworkCommand>) -> Result<()> {
-
+#[allow(clippy::single_match)]
+fn perform_networking(
+    robot_sender: &Sender<RobotCommand>,
+    stop_receiver: &Receiver<NetworkCommand>,
+) -> Ev3Result<()> {
     let mut status = Status::new().unwrap();
 
     // Get server address
     let server_address = get_server_address(DISCOVERY_PORT)?;
-    status.set_connection_state(ConnectionState::CONNECTING);
+    status.set_connection_state(ConnectionState::Connecting);
 
     // Connect to server
     let bind_address = SocketAddr::from(([0, 0, 0, 0], 0));
@@ -129,12 +152,36 @@ fn perform_networking(robot_sender: &Sender<RobotCommand>, stop_receiver: &Recei
     socket.send_to(&[0; 4], &server_address)?;
 
     let mut last_pong = SystemTime::now();
-    status.set_connection_state(ConnectionState::CONNECTED);
+    status.set_connection_state(ConnectionState::Connected);
 
-    send(&socket, &server_address, 1, 1, status.get_version().into_bytes())?;
-    send(&socket, &server_address, 1, 2, status.get_name().into_bytes())?;
-    send(&socket, &server_address, 1, 3, status.get_color().into_bytes())?;
-    send(&socket, &server_address, 1, 4, status.get_available_colors().join(";").into_bytes())?;
+    send(
+        &socket,
+        &server_address,
+        1,
+        1,
+        status.get_version().into_bytes(),
+    )?;
+    send(
+        &socket,
+        &server_address,
+        1,
+        2,
+        status.get_name().into_bytes(),
+    )?;
+    send(
+        &socket,
+        &server_address,
+        1,
+        3,
+        status.get_color().into_bytes(),
+    )?;
+    send(
+        &socket,
+        &server_address,
+        1,
+        4,
+        status.get_available_colors().join(";").into_bytes(),
+    )?;
 
     let mut stopped = false;
 
@@ -148,7 +195,7 @@ fn perform_networking(robot_sender: &Sender<RobotCommand>, stop_receiver: &Recei
 
                 if stopped {
                     stopped = false;
-                    status.set_connection_state(ConnectionState::CONNECTED);
+                    status.set_connection_state(ConnectionState::Connected);
                 }
 
                 // Generate reader
@@ -168,12 +215,12 @@ fn perform_networking(robot_sender: &Sender<RobotCommand>, stop_receiver: &Recei
                 let elapsed = (duration.as_secs() as u32 * 1000) + duration.subsec_millis();
 
                 if elapsed > DISCONNECT_TIMEOUT {
-                    status.set_connection_state(ConnectionState::DISCONNECTED);
-                    return Err(e);
+                    status.set_connection_state(ConnectionState::Disconnected);
+                    return Err(e.into());
                 } else {
                     if elapsed > STOP_TIMEOUT {
                         robot_sender.send(RobotCommand::SetTrack(0.0, 0.0)).unwrap();
-                        status.set_connection_state(ConnectionState::RECONNECTING);
+                        status.set_connection_state(ConnectionState::Reconnecting);
                     }
                     socket.send_to(&[0; 4], &server_address)?;
 
@@ -202,22 +249,24 @@ fn perform_networking(robot_sender: &Sender<RobotCommand>, stop_receiver: &Recei
 pub fn start(robot_sender: Sender<RobotCommand>) -> Sender<NetworkCommand> {
     let (stop_sender, stop_receiver) = mpsc::channel();
 
-    thread::Builder::new().name("Network".to_string()).spawn(move || {
-        loop {
+    thread::Builder::new()
+        .name("Network".to_string())
+        .spawn(move || loop {
             match perform_networking(&robot_sender, &stop_receiver) {
                 Ok(_) => {
                     break;
                 }
                 Err(e) => {
-                    println!("A network error occurred, retry! {}", e);
+                    println!("A network error occurred, retry! {:?}", e);
                 }
             }
-        }
-    }).unwrap();
+        })
+        .unwrap();
 
-    return stop_sender;
+    stop_sender
 }
 
+#[allow(dead_code)]
 pub enum NetworkCommand {
     Color(u8, u8, u8),
     Stop,

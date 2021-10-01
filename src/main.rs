@@ -7,8 +7,8 @@ use std::sync::mpsc::Sender;
 use driving::DrivingCommand;
 use pid::PidCommand;
 
-mod network;
 mod driving;
+mod network;
 mod pid;
 mod status;
 

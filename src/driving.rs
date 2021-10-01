@@ -1,10 +1,9 @@
-use std::io::Result;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread;
 
-use ev3dev_lang_rust::tacho_motor::{self, TachoMotor, LargeMotor, MediumMotor};
-use ev3dev_lang_rust::core::MotorPort;
+use ev3dev_lang_rust::motors::{LargeMotor, MediumMotor, MotorPort};
+use ev3dev_lang_rust::Ev3Result;
 
 const MAX_SPEED: u8 = 100;
 const PID_SPEED: f32 = 0.5;
@@ -13,7 +12,7 @@ const RECEIVE_TIMEOUT: Duration = Duration::from_millis(100);
 use std::time::Duration;
 use std::time::SystemTime;
 
-fn perform_drive(driving_receiver: &Receiver<DrivingCommand>) -> Result<()> {
+fn perform_drive(driving_receiver: &Receiver<DrivingCommand>) -> Ev3Result<()> {
     let mut pid_left_speed: f32 = 0.0;
     let mut pid_right_speed: f32 = 0.0;
 
@@ -24,14 +23,14 @@ fn perform_drive(driving_receiver: &Receiver<DrivingCommand>) -> Result<()> {
 
     let mut kick: Option<SystemTime> = None;
 
-    let mut right_motor = LargeMotor::new(MotorPort::OutA).unwrap();
-    let mut left_motor = LargeMotor::new(MotorPort::OutB).unwrap();
-    let mut kicker = MediumMotor::new(MotorPort::OutC).unwrap();
+    let right_motor = LargeMotor::get(MotorPort::OutA)?;
+    let left_motor = LargeMotor::get(MotorPort::OutB)?;
+    let kicker = MediumMotor::get(MotorPort::OutC)?;
 
     //Calibrate kicker
-    kicker.set_stop_action(String::from(tacho_motor::STOP_ACTION_BRAKE))?;
+    kicker.set_stop_action(MediumMotor::STOP_ACTION_BRAKE)?;
     kicker.set_speed_sp(-100)?;
-    kicker.run_timed(Some(2000))?;
+    kicker.run_timed(Some(Duration::from_millis(2000)))?;
     thread::sleep(Duration::from_millis(2000));
     kicker.stop()?;
     thread::sleep(Duration::from_millis(500));
@@ -84,8 +83,8 @@ fn perform_drive(driving_receiver: &Receiver<DrivingCommand>) -> Result<()> {
                 let left = (pid_left_speed + left_speed).max(-1.0).min(1.0);
                 let right = (pid_right_speed + right_speed).max(-1.0).min(1.0);
 
-                left_motor.set_duty_cycle_sp((left * speed) as isize)?;
-                right_motor.set_duty_cycle_sp((right * speed) as isize)?;
+                left_motor.set_duty_cycle_sp((left * speed) as i32)?;
+                right_motor.set_duty_cycle_sp((right * speed) as i32)?;
             }
         }
 
@@ -97,16 +96,15 @@ fn perform_drive(driving_receiver: &Receiver<DrivingCommand>) -> Result<()> {
                 kicker.run_to_abs_pos(Some(0))?;
             }
         }
-
     }
 }
-
 
 pub fn start() -> Sender<DrivingCommand> {
     let (driving_sender, driving_receiver) = mpsc::channel();
 
-    thread::Builder::new().name("Driving".to_string()).spawn(move || {
-        loop {
+    thread::Builder::new()
+        .name("Driving".to_string())
+        .spawn(move || loop {
             match perform_drive(&driving_receiver) {
                 Ok(_) => {
                     break;
@@ -115,12 +113,13 @@ pub fn start() -> Sender<DrivingCommand> {
                     println!("A drive error occurred, retry!");
                 }
             }
-        }
-    }).unwrap();
+        })
+        .unwrap();
 
-    return driving_sender;
+    driving_sender
 }
 
+#[allow(dead_code)]
 pub enum DrivingCommand {
     SetTrack(f32, f32),
     SetPid(f32, f32),

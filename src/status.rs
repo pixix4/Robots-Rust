@@ -1,16 +1,14 @@
-use std::io::Result;
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
-use ev3dev_lang_rust::led::{self, Led};
-use ev3dev_lang_rust::power_supply::PowerSupply;
+use ev3dev_lang_rust::{Ev3Result, Led, PowerSupply};
 
-const COLOR_LIME: &'static str = "lime";
-const COLOR_YELLOW: &'static str = "yellow";
-const COLOR_AMBER: &'static str = "amber";
-const COLOR_ORANGE: &'static str = "orange";
-const COLOR_RED: &'static str = "red";
-const COLOR_OFF: &'static str = "black";
+const COLOR_LIME: &str = "lime";
+const COLOR_YELLOW: &str = "yellow";
+const COLOR_AMBER: &str = "amber";
+const COLOR_ORANGE: &str = "orange";
+const COLOR_RED: &str = "red";
+const COLOR_OFF: &str = "black";
 
 pub struct Status {
     led: Led,
@@ -19,11 +17,11 @@ pub struct Status {
 }
 
 impl Status {
-    pub fn new() -> Result<Status> {
+    pub fn new() -> Ev3Result<Status> {
         let mut status = Status {
             led: Led::new().unwrap(),
             power: PowerSupply::new().unwrap(),
-            connection: ConnectionState::DISCONNECTED,
+            connection: ConnectionState::Disconnected,
         };
 
         if !Path::new("name").exists() {
@@ -40,14 +38,14 @@ impl Status {
     }
 
     pub fn get_name(&self) -> String {
-        fs::read_to_string("name").unwrap_or_else(|_| { String::new() })
+        fs::read_to_string("name").unwrap_or_else(|_| String::new())
     }
     pub fn set_name(&self, name: String) {
         fs::write("name", name).unwrap();
     }
 
     pub fn get_color(&self) -> String {
-        fs::read_to_string("color").unwrap_or_else(|_| { String::new() })
+        fs::read_to_string("color").unwrap_or_else(|_| String::new())
     }
     pub fn set_color(&mut self, color: String) {
         fs::write("color", color).unwrap();
@@ -59,7 +57,7 @@ impl Status {
         let max = self.power.get_voltage_max_design().unwrap();
         let min = self.power.get_voltage_min_design().unwrap();
 
-        return ((now - min) as f32 / (max - min) as f32).max(0.0).min(1.0);
+        ((now - min) as f32 / (max - min) as f32).max(0.0).min(1.0)
     }
 
     pub fn set_connection_state(&mut self, connected: ConnectionState) {
@@ -69,40 +67,19 @@ impl Status {
 
     fn load_color(&mut self) {
         let main_color = match self.get_color().as_ref() {
-            COLOR_LIME => {
-                led::COLOR_GREEN
-            }
-            COLOR_YELLOW => {
-                led::COLOR_YELLOW
-            }
-            COLOR_AMBER => {
-                led::COLOR_AMBER
-            }
-            COLOR_ORANGE => {
-                led::COLOR_ORANGE
-            }
-            COLOR_RED => {
-                led::COLOR_RED
-            }
-            _ => {
-                led::COLOR_OFF
-            }
+            COLOR_LIME => Led::COLOR_GREEN,
+            COLOR_YELLOW => Led::COLOR_YELLOW,
+            COLOR_AMBER => Led::COLOR_AMBER,
+            COLOR_ORANGE => Led::COLOR_ORANGE,
+            COLOR_RED => Led::COLOR_RED,
+            _ => Led::COLOR_OFF,
         };
 
-
         let status_color = match self.connection {
-            ConnectionState::DISCONNECTED => {
-                led::COLOR_RED
-            }
-            ConnectionState::CONNECTING => {
-                led::COLOR_AMBER
-            }
-            ConnectionState::CONNECTED => {
-                led::COLOR_GREEN
-            }
-            ConnectionState::RECONNECTING => {
-                led::COLOR_YELLOW
-            }
+            ConnectionState::Disconnected => Led::COLOR_RED,
+            ConnectionState::Connecting => Led::COLOR_AMBER,
+            ConnectionState::Connected => Led::COLOR_GREEN,
+            ConnectionState::Reconnecting => Led::COLOR_YELLOW,
         };
 
         self.led.set_left_color(main_color).unwrap();
@@ -115,7 +92,7 @@ impl Status {
             String::from(COLOR_YELLOW),
             String::from(COLOR_AMBER),
             String::from(COLOR_ORANGE),
-            String::from(COLOR_RED)
+            String::from(COLOR_RED),
         ]
     }
 
@@ -125,8 +102,8 @@ impl Status {
 }
 
 pub enum ConnectionState {
-    DISCONNECTED,
-    CONNECTED,
-    CONNECTING,
-    RECONNECTING,
+    Disconnected,
+    Connected,
+    Connecting,
+    Reconnecting,
 }
